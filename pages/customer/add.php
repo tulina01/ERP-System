@@ -5,6 +5,9 @@ include_once '../../includes/header.php';
 $database = new Database();
 $db = $database->getConnection();
 
+$message = '';
+$message_type = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = $_POST['title'];
     $first_name = $_POST['first_name'];
@@ -13,20 +16,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $contact_no = $_POST['contact_no'];
     $district = $_POST['district'];
 
-    $query = "INSERT INTO customer (title, first_name, middle_name, last_name, contact_no, district) 
-              VALUES (:title, :first_name, :middle_name, :last_name, :contact_no, :district)";
-    $stmt = $db->prepare($query);
-    $stmt->bindParam(':title', $title);
-    $stmt->bindParam(':first_name', $first_name);
-    $stmt->bindParam(':middle_name', $middle_name);
-    $stmt->bindParam(':last_name', $last_name);
-    $stmt->bindParam(':contact_no', $contact_no);
-    $stmt->bindParam(':district', $district);
+    // Check if contact number already exists
+    $check_query = "SELECT COUNT(*) as count FROM customer WHERE contact_no = :contact_no";
+    $check_stmt = $db->prepare($check_query);
+    $check_stmt->bindParam(':contact_no', $contact_no);
+    $check_stmt->execute();
+    $result = $check_stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($stmt->execute()) {
-        echo "<div class='alert alert-success'>Customer added successfully.</div>";
+    if ($result['count'] > 0) {
+        $message = "Customer with this contact number already exists.";
+        $message_type = "danger";
     } else {
-        echo "<div class='alert alert-danger'>Unable to add customer.</div>";
+        $query = "INSERT INTO customer (title, first_name, middle_name, last_name, contact_no, district) 
+                  VALUES (:title, :first_name, :middle_name, :last_name, :contact_no, :district)";
+        $stmt = $db->prepare($query);
+        $stmt->bindParam(':title', $title);
+        $stmt->bindParam(':first_name', $first_name);
+        $stmt->bindParam(':middle_name', $middle_name);
+        $stmt->bindParam(':last_name', $last_name);
+        $stmt->bindParam(':contact_no', $contact_no);
+        $stmt->bindParam(':district', $district);
+
+        if ($stmt->execute()) {
+            $message = "Customer added successfully.";
+            $message_type = "success";
+        } else {
+            $message = "Error adding customer.";
+            $message_type = "danger";
+        }
     }
 }
 
@@ -37,7 +54,15 @@ $district_stmt->execute();
 ?>
 
 <h2>Add New Customer</h2>
-<form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" onsubmit="return validateForm('customerForm')">
+
+<?php if ($message): ?>
+    <div class="alert alert-<?php echo $message_type; ?> alert-dismissible fade show" role="alert">
+        <?php echo $message; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<form id="customerForm" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" onsubmit="return validateForm()">
     <div class="form-group mb-3">
         <label for="title">Title</label>
         <select name="title" id="title" class="form-control" required>
@@ -76,5 +101,27 @@ $district_stmt->execute();
     <button type="submit" class="btn btn-primary">Add Customer</button>
     <a href="list.php" class="btn btn-secondary">Cancel</a>
 </form>
+
+<script>
+function validateForm() {
+    var title = document.getElementById('title').value;
+    var firstName = document.getElementById('first_name').value;
+    var lastName = document.getElementById('last_name').value;
+    var contactNo = document.getElementById('contact_no').value;
+    var district = document.getElementById('district').value;
+
+    if (title == "" || firstName == "" || lastName == "" || contactNo == "" || district == "") {
+        alert("Please fill all required fields");
+        return false;
+    }
+
+    if (contactNo.length != 10 || isNaN(contactNo)) {
+        alert("Contact number should be 10 digits");
+        return false;
+    }
+
+    return true;
+}
+</script>
 
 <?php include_once '../../includes/footer.php'; ?>

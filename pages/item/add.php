@@ -5,6 +5,10 @@ include_once '../../includes/header.php';
 $database = new Database();
 $db = $database->getConnection();
 
+$message = '';
+$message_type = '';
+$existing_item_id = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $item_code = $_POST['item_code'];
     $item_category = $_POST['item_category'];
@@ -13,20 +17,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $quantity = $_POST['quantity'];
     $unit_price = $_POST['unit_price'];
 
-    $query = "INSERT INTO item (item_code, item_category, item_subcategory, item_name, quantity, unit_price) 
-              VALUES (:item_code, :item_category, :item_subcategory, :item_name, :quantity, :unit_price)";
-    $stmt = $db->prepare($query);
-    $stmt->bindParam(':item_code', $item_code);
-    $stmt->bindParam(':item_category', $item_category);
-    $stmt->bindParam(':item_subcategory', $item_subcategory);
-    $stmt->bindParam(':item_name', $item_name);
-    $stmt->bindParam(':quantity', $quantity);
-    $stmt->bindParam(':unit_price', $unit_price);
+    // Check if item code already exists
+    $check_query = "SELECT id FROM item WHERE item_code = :item_code";
+    $check_stmt = $db->prepare($check_query);
+    $check_stmt->bindParam(':item_code', $item_code);
+    $check_stmt->execute();
+    $result = $check_stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($stmt->execute()) {
-        echo "<div class='alert alert-success'>Item added successfully.</div>";
+    if ($result) {
+        $message = "An item with this item code already exists.";
+        $message_type = "warning";
+        $existing_item_id = $result['id'];
     } else {
-        echo "<div class='alert alert-danger'>Unable to add item.</div>";
+        $query = "INSERT INTO item (item_code, item_category, item_subcategory, item_name, quantity, unit_price) 
+                  VALUES (:item_code, :item_category, :item_subcategory, :item_name, :quantity, :unit_price)";
+        $stmt = $db->prepare($query);
+        $stmt->bindParam(':item_code', $item_code);
+        $stmt->bindParam(':item_category', $item_category);
+        $stmt->bindParam(':item_subcategory', $item_subcategory);
+        $stmt->bindParam(':item_name', $item_name);
+        $stmt->bindParam(':quantity', $quantity);
+        $stmt->bindParam(':unit_price', $unit_price);
+
+        if ($stmt->execute()) {
+            $message = "Item added successfully.";
+            $message_type = "success";
+        } else {
+            $message = "Error adding item.";
+            $message_type = "danger";
+        }
     }
 }
 
@@ -42,7 +61,18 @@ $subcategory_stmt->execute();
 ?>
 
 <h2>Add New Item</h2>
-<form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" onsubmit="return validateForm('itemForm')">
+
+<?php if ($message): ?>
+    <div class="alert alert-<?php echo $message_type; ?> alert-dismissible fade show" role="alert">
+        <?php echo $message; ?>
+        <?php if ($existing_item_id): ?>
+            <a href="edit.php?id=<?php echo $existing_item_id; ?>" class="btn btn-primary btn-sm ms-2">Edit Item</a>
+        <?php endif; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<form id="itemForm" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" onsubmit="return validateForm()">
     <div class="form-group mb-3">
         <label for="item_code">Item Code</label>
         <input type="text" name="item_code" id="item_code" class="form-control" required>
@@ -80,5 +110,33 @@ $subcategory_stmt->execute();
     <button type="submit" class="btn btn-primary">Add Item</button>
     <a href="list.php" class="btn btn-secondary">Cancel</a>
 </form>
+
+<script>
+function validateForm() {
+    var itemCode = document.getElementById('item_code').value;
+    var itemCategory = document.getElementById('item_category').value;
+    var itemSubcategory = document.getElementById('item_subcategory').value;
+    var itemName = document.getElementById('item_name').value;
+    var quantity = document.getElementById('quantity').value;
+    var unitPrice = document.getElementById('unit_price').value;
+
+    if (itemCode == "" || itemCategory == "" || itemSubcategory == "" || itemName == "" || quantity == "" || unitPrice == "") {
+        alert("Please fill all required fields");
+        return false;
+    }
+
+    if (isNaN(quantity) || quantity < 0) {
+        alert("Quantity must be a non-negative number");
+        return false;
+    }
+
+    if (isNaN(unitPrice) || unitPrice < 0) {
+        alert("Unit price must be a non-negative number");
+        return false;
+    }
+
+    return true;
+}
+</script>
 
 <?php include_once '../../includes/footer.php'; ?>
